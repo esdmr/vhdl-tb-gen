@@ -1,0 +1,18 @@
+{
+	"name": "@esdmr/vhdl-tb-gen",
+	"version": "0.0.0",
+	"license": "MIT",
+	"author": {
+		"email": "esdmr0@gmail.com",
+		"name": "esdmr0",
+		"url": "https://github.com/esdmr"
+	},
+	"bin": "index.js",
+	"dependencies": {
+		"tree-sitter": "^0.25.0",
+		"tree-sitter-vhdl": "github:jpt13653903/tree-sitter-vhdl"
+	},
+	"devDependencies": {
+		"@types/node": "^22.19.1"
+	}
+}
