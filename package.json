@@ -8,6 +8,14 @@
 		"url": "https://github.com/esdmr"
 	},
 	"bin": "index.js",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/esdmr/vhdl-tb-gen"
+	},
+	"homepage": "https://github.com/esdmr/vhdl-tb-gen#readme",
+	"bugs": {
+		"url": "https://github.com/esdmr/vhdl-tb-gen/issues"
+	},
 	"dependencies": {
 		"tree-sitter": "^0.25.0",
 		"tree-sitter-vhdl": "github:jpt13653903/tree-sitter-vhdl"
