@@ -6,28 +6,41 @@ const Vhdl = require('tree-sitter-vhdl');
 const assert = require('assert');
 
 // #region Type Bounds
-/** @param {string} type */
-function getTypeBounds(type) {
-	let low = '';
-	let high = '';
+/**
+ * @param {string} type
+ * @param {Parser.SyntaxNode} [range]
+ * @returns {{low: string, high: string, converter(i: string): string}}
+ */
+function getTypeBounds(type, range) {
+	const name = type.match(/^\w+/)?.[0];
 
-	switch (type.match(/^\w+/)?.[0]) {
+	switch (name) {
 		case 'bit':
 		case 'std_logic':
 		case 'std_ulogic': {
-			low = "'0'";
-			high = "'1'";
-			break;
+			return {
+				low: "0",
+				high: "1",
+				converter: (i) => `${type}'val(${i})`,
+			};
 		}
 
 		case 'std_ulogic_vector':
 		case 'std_logic_vector': {
-			let match = type.match(/\((\d+) ((?:down)?to) (\d+)\)/);
-			if (match) {
-				low = '"' + '0'.repeat(match[2] === 'downto' ? +match[3] : +match[1]) + '"';
-				high = '"' + '0'.repeat(match[2] === 'downto' ? +match[1] : +match[3]) + '"';
+			if (!range) {
+				console.warn(`Incomplete type ${type} without a range. ignoring it.`);
+				break;
 			}
-			break;
+
+			const [left, kind, right] = range.children;
+			const reversed = kind.text === 'to';
+			const length = `((${reversed ? right.text : left.text}) - (${reversed ? left.text : right.text}) + 1)`;
+
+			return {
+				low: "0",
+				high: `2 ** ${length} - 1`,
+				converter: (i) => `${name}(to_unsigned(${i}, ${length}))`,
+			};
 		}
 
 		default: {
@@ -35,7 +48,11 @@ function getTypeBounds(type) {
 		}
 	}
 
-	return { low, high };
+	return {
+		low: '',
+		high: '',
+		converter: () => '',
+	};
 }
 // #endregion
 
@@ -56,7 +73,7 @@ const ast = parser.parse(input);
 // #region First pass
 /** @type {Record<string, string>} */
 const entityClauses = {};
-/** @type {Record<string, Record<string, {mode: string, type: string, low: string, high: string}>>} */
+/** @type {Record<string, Record<string, {mode: string, type: string} & ReturnType<typeof getTypeBounds>>>} */
 const entityPins = {};
 /** @type {Record<string, string>} */
 const entityHeads = {};
@@ -87,7 +104,7 @@ for (const node of ast.rootNode.descendantsOfType('entity_declaration')) {
 		const ports = int.children[0].descendantsOfType('identifier').map(i => i.text);
 		const [mode, type] = int.children[2].children;
 		assert.equal(int.children[2].type, 'simple_mode_indication', `port mode ${mode.type} not supported: entity ${name} port(s) ${ports}: ${mode.text}`);
-		const bounds = getTypeBounds(type.text);
+		const bounds = getTypeBounds(type.text, type.descendantsOfType('simple_range')?.[0]);
 
 		for (const port of ports) {
 			entityPins[name][port.trim()] = {mode: mode.text, type: type.text, ...bounds};
@@ -173,7 +190,7 @@ for (const node of ast.rootNode.descendantsOfType('line_comment')) {
 			assert.ok(state);
 			const pins = entityPins[state.entity];
 			const names = (text.match(/^every \(([^)]+)\);$/)?.[1] || Object.keys(pins).join(',')).split(',').filter(Boolean).map(i => i.trim()).map(name => ({name, ...pins[name]}));
-			output += names.map((n, i) => `for i_${i} in ${n.type}'( ${n.low} ) to ${n.type}'( ${n.high} ) loop\n${n.name} <= i_${i};\n`).join('');
+			output += names.map((n, i) => `for i_${i} in ${n.low} to ${n.high} loop\n${n.name} <= ${n.converter(`i_${i}`)};\n`).join('');
 			output += `wait for ${state.sync};\n`;
 			output += names.map(() => `end loop;\n`).join('') + '\n';
 			break;
